@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pac-Man</title>
+  <style>
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: black;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="448" height="496"></canvas>
+<div id="gameOver" style="display:none; text-align:center; color:white; font-size:24px; font-weight:bold; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);">
+  YOU ARE LOVED<br>YOU ARE WORTHY<br>YOU ARE THE SUPER PAC KING
+</div>
+<script>
+let currentWallColor = 'blue';
+const wallColors = ['blue', 'purple', 'green', 'orange', 'red'];
+setInterval(() => {
+  const newColor = wallColors[Math.floor(Math.random() * wallColors.length)];
+  currentWallColor = newColor;
+}, 3000);
+
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const tileSize = 16;
+const rows = 31;
+const cols = 28;
+
+const pacman = {
+  x: 14,
+  y: 23,
+  dx: 0,
+  dy: 0,
+  nextDx: 0,
+  nextDy: 0,
+  speed: 0.001,
+  radius: 7,
+  alive: true
+};
+
+const ghosts = [
+  { x: 13, y: 14, dx: 1, dy: 0, color: 'red' },
+  { x: 14, y: 14, dx: 0, dy: 1, color: 'pink' },
+  { x: 15, y: 14, dx: -1, dy: 0, color: 'cyan' },
+  { x: 14, y: 15, dx: 0, dy: -1, color: 'orange' }
+];
+
+const pellets = [];
+let walls = [];
+
+function generateMazeWalls() {
+  const newWalls = [];
+  for (let i = 0; i < 60; i++) {
+    const r = Math.floor(Math.random() * (rows - 2)) + 1;
+    const c = Math.floor(Math.random() * (cols - 2)) + 1;
+    newWalls.push([r, c]);
+  }
+  newWalls.push(...Array.from({length: cols}, (_, c) => [0, c]));
+  newWalls.push(...Array.from({length: cols}, (_, c) => [rows - 1, c]));
+  newWalls.push(...Array.from({length: rows}, (_, r) => [r, 0]));
+  newWalls.push(...Array.from({length: rows}, (_, r) => [r, cols - 1]));
+  return newWalls;
+}
+
+walls = generateMazeWalls();
+
+setInterval(() => {
+  walls = [];
+  setTimeout(() => {
+    walls = generateMazeWalls();
+    pellets.forEach(p => {
+      if (!p.eaten && walls.some(w => w[0] === p.y && w[1] === p.x)) {
+        let newX, newY;
+        do {
+          newX = Math.floor(Math.random() * (cols - 2)) + 1;
+          newY = Math.floor(Math.random() * (rows - 2)) + 1;
+        } while (walls.some(w => w[0] === newY && w[1] === newX));
+        p.x = newX;
+        p.y = newY;
+      }
+    });
+  }, 2000);
+}, 10000);
+
+for (let r = 1; r < rows - 1; r++) {
+  for (let c = 1; c < cols - 1; c++) {
+    if (!walls.some(w => w[0] === r && w[1] === c)) {
+      pellets.push({ x: c, y: r, eaten: false });
+    }
+  }
+}
+
+function drawPacman() {
+  if (!pacman.alive) {
+    setTimeout(() => {
+      pacman.x = 14;
+      pacman.y = 23;
+      pacman.dx = 0;
+      pacman.dy = 0;
+      pacman.nextDx = 0;
+      pacman.nextDy = 0;
+      pacman.alive = true;
+    }, 2000);
+    return;
+  }
+  ctx.beginPath();
+  ctx.arc(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2, pacman.radius, 0.2 * Math.PI, 1.8 * Math.PI);
+  ctx.lineTo(pacman.x * tileSize + tileSize / 2, pacman.y * tileSize + tileSize / 2);
+  ctx.fillStyle = "yellow";
+  ctx.fill();
+  ctx.closePath();
+}
+
+function drawGhosts() {
+  ghosts.forEach(ghost => {
+    ctx.beginPath();
+    ctx.arc(ghost.x * tileSize + tileSize / 2, ghost.y * tileSize + tileSize / 2, pacman.radius, 0, Math.PI * 2);
+    ctx.fillStyle = ghost.color;
+    ctx.fill();
+    ctx.closePath();
+  });
+}
+
+function drawPellets() {
+  ctx.fillStyle = "white";
+  pellets.forEach(p => {
+    if (!p.eaten) {
+      ctx.beginPath();
+      ctx.arc(p.x * tileSize + tileSize / 2, p.y * tileSize + tileSize / 2, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.closePath();
+    }
+  });
+}
+
+function drawWalls() {
+  ctx.fillStyle = currentWallColor;
+  for (let i = 0; i < walls.length; i++) {
+    let [r, c] = walls[i];
+    ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+  }
+}
+
+function isWall(x, y) {
+  return walls.some(w => w[0] === y && w[1] === x);
+}
+
+function updateGhosts() {
+  ghosts.forEach(g => {
+    const dirs = [
+      [1, 0], [-1, 0], [0, 1], [0, -1],
+      [1, 1], [-1, -1], [1, -1], [-1, 1]
+    ];
+    const valid = dirs.filter(([dx, dy]) => {
+      const nx = g.x + dx;
+      const ny = g.y + dy;
+      return !isWall(nx, ny) && nx >= 0 && ny >= 0 && nx < cols && ny < rows;
+    });
+    if (valid.length) {
+      const [dx, dy] = valid[Math.floor(Math.random() * valid.length)];
+      g.dx = dx;
+      g.dy = dy;
+      g.x += dx;
+      g.y += dy;
+    }
+  });
+}
+
+function update() {
+  if (pellets.every(p => p.eaten)) {
+    document.getElementById('gameOver').style.display = 'block';
+    return;
+  }
+  if (!pacman.alive) return;
+
+  if (!isWall(pacman.x + pacman.nextDx, pacman.y + pacman.nextDy)) {
+    pacman.dx = pacman.nextDx;
+    pacman.dy = pacman.nextDy;
+  }
+
+  const nextX = pacman.x + pacman.dx;
+  const nextY = pacman.y + pacman.dy;
+
+  if (!isWall(nextX, nextY)) {
+    pacman.x = (nextX + cols) % cols;
+    pacman.y = (nextY + rows) % rows;
+  }
+
+  pellets.forEach(p => {
+    if (!p.eaten && p.x === Math.round(pacman.x) && p.y === Math.round(pacman.y)) {
+      p.eaten = true;
+    }
+  });
+
+  ghosts.forEach(g => {
+    if (Math.round(g.x) === Math.round(pacman.x) && Math.round(g.y) === Math.round(pacman.y)) {
+      pacman.alive = false;
+    }
+  });
+
+  updateGhosts();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawWalls();
+  drawPellets();
+  drawPacman();
+  drawGhosts();
+}
+
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+
+window.addEventListener("keydown", function(e) {
+  if (e.code === 'Space') {
+    const explosionRadius = 2;
+    const ghostsToRemove = [];
+    for (let i = 0; i < ghosts.length; i++) {
+      const g = ghosts[i];
+      const dx = Math.abs(g.x - Math.round(pacman.x));
+      const dy = Math.abs(g.y - Math.round(pacman.y));
+      if (dx <= explosionRadius && dy <= explosionRadius) {
+        ghostsToRemove.push(i);
+      }
+    }
+    ghostsToRemove.forEach(i => {
+      const g = ghosts[i];
+      ctx.beginPath();
+      ctx.arc(g.x * tileSize + tileSize / 2, g.y * tileSize + tileSize / 2, 12, 0, 2 * Math.PI);
+      ctx.fillStyle = 'orange';
+      ctx.fill();
+      ctx.closePath();
+    });
+    setTimeout(() => {
+      ghostsToRemove.reverse().forEach(i => ghosts.splice(i, 1));
+    }, 100);
+  }
+
+  switch (e.key) {
+    case "ArrowUp": pacman.nextDx = 0; pacman.nextDy = -1; break;
+    case "ArrowDown": pacman.nextDx = 0; pacman.nextDy = 1; break;
+    case "ArrowLeft": pacman.nextDx = -1; pacman.nextDy = 0; break;
+    case "ArrowRight": pacman.nextDx = 1; pacman.nextDy = 0; break;
+  }
+});
+</script>
+</body>
+</html>
